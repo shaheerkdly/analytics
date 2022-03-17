@@ -75,13 +75,14 @@ class AnalyticController extends Controller
         $status = false;
         $today = Carbon::now()->toDateString();
         $users = User::pluck('id', 'name')->toArray();
+        $analytics = Analytic::whereDate('date_time', '!=', $today);
         foreach ($users as $name => $user_id) {
-            $analytics = Analytic::where('user_id', $user_id);
-            $analytcs_dates = $analytics->clone()->orderBy('date_time')->get()->groupBy(function ($item) {
+            $user_analytics = $analytics->clone()->where('user_id', $user_id);
+            $analytcs_dates = $user_analytics->clone()->orderBy('date_time')->get()->groupBy(function ($item) {
                 return $item->date_time->format('Y-m-d');
             });
             foreach ($analytcs_dates as $date => $data) {
-                $day_analytics = $analytics->clone()->whereDate('date_time', $date);
+                $day_analytics = $user_analytics->clone()->whereDate('date_time', $date);
 
                 $total_visits = $day_analytics->clone()->count();
                 if ($total_visits) {
@@ -108,10 +109,11 @@ class AnalyticController extends Controller
                             ['count' => $country_count],
                         );
                     }
-                    $analytics->delete();
                 }
             }
-
+        }
+        if ($status) {
+            $analytics->delete();
         }
 
         return $status;
