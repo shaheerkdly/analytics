@@ -5,9 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Analytic extends Model
+class CountryAnalytic extends Model
 {
     use HasFactory;
 
-    protected $dates = ['date_time'];
+    protected $guarded = [];
 }

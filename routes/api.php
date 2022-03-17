@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AnalyticController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -14,6 +15,9 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
-});
+Route::get('/today', [AnalyticController::class, 'todayStats'])->name('todayStats');
+Route::get('/previous-week', [AnalyticController::class, 'previousWeekStats'])->name('previousWeekStats');
+Route::get('/previous-month', [AnalyticController::class, 'previousMonthStats'])->name('previousMonthStats');
+Route::get('/previous-three-month', [AnalyticController::class, 'previousThreeMonthStats'])->name('previousThreeMonthStats');
+Route::get('/all-time', [AnalyticController::class, 'allTimeStats'])->name('allTimeStats');
+
