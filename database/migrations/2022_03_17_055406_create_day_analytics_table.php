@@ -15,6 +15,7 @@ return new class extends Migration
     {
         Schema::create('day_analytics', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('user_id')->constrained();
             $table->date('date');
             $table->integer('count');
             $table->timestamps();

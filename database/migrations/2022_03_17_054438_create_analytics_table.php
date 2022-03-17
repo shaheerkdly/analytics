@@ -15,7 +15,7 @@ return new class extends Migration
     {
         Schema::create('analytics', function (Blueprint $table) {
             $table->id();
-            $table->bigInteger('user_id')->unsigned();
+            $table->foreignId('user_id')->constrained();
             $table->dateTime('date_time');
             $table->integer('count')->default(1);
             $table->ipAddress('ip_address');

@@ -16,6 +16,7 @@ return new class extends Migration
         Schema::create('referer_analytics', function (Blueprint $table) {
             $table->id();
             $table->date('date');
+            $table->foreignId('user_id')->constrained();
             $table->string('referer');
             $table->integer('count');
             $table->timestamps();

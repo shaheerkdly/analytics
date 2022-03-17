@@ -6,6 +6,7 @@ use App\Models\Analytic;
 use App\Models\CountryAnalytic;
 use App\Models\DayAnalytic;
 use App\Models\RefererAnalytic;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,38 +22,43 @@ class AnalyticController extends Controller
      */
     public function saveAggregateDataForPreviousDay($now)
     {
-
         $status = false;
         $yesterday = Carbon::parse($now)->subDay()->toDateString();
 
         $analytics = Analytic::whereDate('date_time', $yesterday);
-
-        $yesterday_total_visits = $analytics->clone()->count();
-        if ($yesterday_total_visits) {
-            $save_yesterday_total_visits = DayAnalytic::updateOrCreate(
-                ['date' => $yesterday],
-                ['count' => $yesterday_total_visits],
-            );
-            $status = true;
+        $users = $analytics->clone()->select('user_id')->distinct()->get();
+        foreach ($users as $user) {
+            $user_id = $user->user_id;
+            $user_analytics = $analytics->clone()->where('user_id', $user_id);
+            $yesterday_total_visits = $user_analytics->clone()->count();
+            if ($yesterday_total_visits) {
+                $save_yesterday_total_visits = DayAnalytic::updateOrCreate(
+                    ['date' => $yesterday, 'user_id' => $user_id],
+                    ['count' => $yesterday_total_visits],
+                );
+                $status = true;
+            }
+            if ($status) {
+                $yesterday_referers = $user_analytics->clone()->where('user_id', $user_id)->select('referer')->distinct()->get();
+                foreach ($yesterday_referers as $yesterday_referer) {
+                    $yesterday_referer_count = $user_analytics->clone()->where('referer', $yesterday_referer->referer)->count();
+                    $save_yesterday_referer_count = RefererAnalytic::updateOrCreate(
+                        ['date' => $yesterday, 'user_id' => $user_id, 'referer' => $yesterday_referer->referer],
+                        ['count' => $yesterday_referer_count],
+                    );
+                }
+                $yesterday_countries = $user_analytics->clone()->select('country')->distinct()->get();
+                foreach ($yesterday_countries as $yesterday_country) {
+                    $yesterday_country_count = $user_analytics->clone()->where('country', $yesterday_country->country)->count();
+                    $save_yesterday_country_count = CountryAnalytic::updateOrCreate(
+                        ['date' => $yesterday, 'user_id' => $user_id, 'country' => $yesterday_country->country],
+                        ['count' => $yesterday_country_count],
+                    );
+                }
+            }
         }
         if ($status) {
-            $yesterday_referers = $analytics->clone()->select('referer')->distinct()->get();
-            foreach($yesterday_referers as $yesterday_referer) {
-                $yesterday_referer_count = $analytics->clone()->where('referer', $yesterday_referer->referer)->count();
-                $save_yesterday_referer_count = RefererAnalytic::updateOrCreate(
-                    ['date' => $yesterday, 'referer' => $yesterday_referer->referer],
-                    ['count' => $yesterday_referer_count],
-                );
-            }
-            $yesterday_countries = $analytics->clone()->select('country')->distinct()->get();
-            foreach($yesterday_countries as $yesterday_country) {
-                $yesterday_country_count = $analytics->clone()->where('country', $yesterday_country->country)->count();
-                $save_yesterday_country_count = CountryAnalytic::updateOrCreate(
-                    ['date' => $yesterday, 'country' => $yesterday_country->country],
-                    ['count' => $yesterday_country_count],
-                );
-            }
-
+            $analytics->delete();
         }
 
         return $status;
@@ -67,44 +73,46 @@ class AnalyticController extends Controller
     public function saveAggregateData()
     {
         $status = false;
-        $now = Carbon::now()->toDateTimeString();
-        $yesterday = Carbon::parse($now)->subDay()->toDateString();
+        $today = Carbon::now()->toDateString();
+        $users = User::pluck('id', 'name')->toArray();
+        foreach ($users as $name => $user_id) {
+            $analytics = Analytic::where('user_id', $user_id)->whereDate('date_time', '!=', $today);
+            $analytcs_dates = $analytics->clone()->orderBy('date_time')->get()->groupBy(function ($item) {
+                return $item->date_time->format('Y-m-d');
+            });
+            foreach ($analytcs_dates as $date => $data) {
+                $day_analytics = $analytics->clone()->whereDate('date_time', $date);
 
-        $analytcs_dates = Analytic::orderBy('date_time')->get()->groupBy(function($item) {
-            return $item->date_time->format('Y-m-d');
-       });
-       foreach ($analytcs_dates as $date => $data) {
-        $analytics = Analytic::whereDate('date_time', $date);
+                $total_visits = $day_analytics->clone()->count();
+                if ($total_visits) {
+                    $save_total_visits = DayAnalytic::updateOrCreate(
+                        ['date' => $date, 'user_id' => $user_id],
+                        ['count' => $total_visits],
+                    );
+                    $status = true;
+                }
+                if ($status) {
+                    $referers = $day_analytics->clone()->select('referer')->distinct()->get();
+                    foreach ($referers as $referer) {
+                        $referer_count = $day_analytics->clone()->where('referer', $referer->referer)->count();
+                        $save_referer_count = RefererAnalytic::updateOrCreate(
+                            ['date' => $date, 'user_id' => $user_id, 'referer' => $referer->referer],
+                            ['count' => $referer_count],
+                        );
+                    }
+                    $countries = $day_analytics->clone()->select('country')->distinct()->get();
+                    foreach ($countries as $country) {
+                        $country_count = $day_analytics->clone()->where('country', $country->country)->count();
+                        $save_country_count = CountryAnalytic::updateOrCreate(
+                            ['date' => $date, 'user_id' => $user_id, 'country' => $country->country],
+                            ['count' => $country_count],
+                        );
+                    }
+                    $analytics->delete();
+                }
+            }
 
-           $total_visits = $analytics->clone()->count();
-           if ($total_visits) {
-               $save_total_visits = DayAnalytic::updateOrCreate(
-                   ['date' => $date],
-                   ['count' => $total_visits],
-               );
-               $status = true;
-           }
-           if ($status) {
-               $referers = $analytics->clone()->select('referer')->distinct()->get();
-               foreach($referers as $referer) {
-                   $referer_count = $analytics->clone()->where('referer', $referer->referer)->count();
-                   $save_referer_count = RefererAnalytic::updateOrCreate(
-                       ['date' => $date, 'referer' => $referer->referer],
-                       ['count' => $referer_count],
-                   );
-               }
-               $countries = $analytics->clone()->select('country')->distinct()->get();
-               foreach($countries as $country) {
-                   $country_count = $analytics->clone()->where('country', $country->country)->count();
-                   $save_country_count = CountryAnalytic::updateOrCreate(
-                       ['date' => $date, 'country' => $country->country],
-                       ['count' => $country_count],
-                   );
-               }
-
-           }
-
-       }
+        }
 
         return $status;
     }
@@ -113,19 +121,20 @@ class AnalyticController extends Controller
      * Get today stats
      * @return \Illuminate\Http\Response
      */
-    public function todayStats()
+    public function todayStats(User $user)
     {
+        $user_id = $user->id;
         $data = [];
         $from = Carbon::now()->subHours('24')->toDateTimeString();
-        $analytics = Analytic::where('date_time', '>=', $from);
+        $analytics = Analytic::where('date_time', '>=', $from)->where('user_id', $user_id);
         $today_total_visits = $analytics->clone()->count();
         $data['visits'] = $today_total_visits;
         $yesterday = Carbon::now()->subDay()->toDateString();
-        $yesterday_visits = DayAnalytic::where('date', $yesterday)->first();
+        $yesterday_visits = DayAnalytic::where('user_id', $user_id)->where('date', $yesterday)->first();
         if ($yesterday_visits) {
             $yesterday_total_visits = $yesterday_visits->count;
             $data['visits_last_day'] = $yesterday_total_visits;
-            $data['visits_percentage_difference'] = round(($today_total_visits - $yesterday_total_visits) / $yesterday_total_visits * 100, 2);
+            $data['visits_percentage_difference'] = $yesterday_total_visits ? round(($today_total_visits - $yesterday_total_visits) / $yesterday_total_visits * 100, 2) : $today_total_visits * 100;
         }
         $today_referers = $analytics->clone()->select('referer')->distinct()->get();
         foreach ($today_referers as $today_referer) {
@@ -145,34 +154,35 @@ class AnalyticController extends Controller
      * Get previous week stats
      * @return \Illuminate\Http\Response
      */
-    public function previousWeekStats()
+    public function previousWeekStats(User $user)
     {
+        $user_id = $user->id;
         $data = [];
         $from = Carbon::now()->subDays('7')->toDateString();
-        $analytics = DayAnalytic::whereDate('date', '>=', $from);
-        $prevoius_week_total_visits = $analytics->clone()->sum('count');
-        $data['visits'] = $prevoius_week_total_visits;
+        $analytics = DayAnalytic::where('user_id', $user_id)->whereDate('date', '>=', $from);
+        $previous_week_total_visits = $analytics->clone()->sum('count');
+        $data['visits'] = $previous_week_total_visits;
         $week_before = Carbon::now()->subDays('14')->toDateString();
-        $week_before_visits = DayAnalytic::whereDate('date', '>=', $week_before)
+        $week_before_visits = DayAnalytic::where('user_id', $user_id)->whereDate('date', '>=', $week_before)
         ->whereDate('date', '<', $from);
         if ($week_before_visits) {
             $week_before_total_visits = $week_before_visits->sum('count');
             $data['visits_week_before'] = $week_before_total_visits;
-            $data['visits_percentage_difference'] = round(($prevoius_week_total_visits - $week_before_total_visits) / $week_before_total_visits * 100, 2);
+            $data['visits_percentage_difference'] = $week_before_total_visits ? round(($previous_week_total_visits - $week_before_total_visits) / $week_before_total_visits * 100, 2) : $previous_week_total_visits * 100;
         }
 
-        $analytics = RefererAnalytic::whereDate('date', '>=', $from);
-        $prevoius_week_referers = $analytics->clone()->select('referer')->distinct()->get();
-        foreach ($prevoius_week_referers as $prevoius_week_referer) {
-            $prevoius_week_referers_count = $analytics->clone()->where('referer', $prevoius_week_referer->referer)->sum('count');
-            $data['referers'][$prevoius_week_referer->referer] = $prevoius_week_referers_count;
+        $analytics = RefererAnalytic::where('user_id', $user_id)->whereDate('date', '>=', $from);
+        $previous_week_referers = $analytics->clone()->select('referer')->distinct()->get();
+        foreach ($previous_week_referers as $previous_week_referer) {
+            $previous_week_referers_count = $analytics->clone()->where('referer', $previous_week_referer->referer)->sum('count');
+            $data['referers'][$previous_week_referer->referer] = $previous_week_referers_count;
         }
 
-        $analytics = CountryAnalytic::whereDate('date', '>=', $from);
-        $prevoius_week_countries = $analytics->clone()->select('country')->distinct()->get();
-        foreach ($prevoius_week_countries as $prevoius_week_country) {
-            $prevoius_week_countries_count = $analytics->clone()->where('country', $prevoius_week_country->country)->sum('count');
-            $data['countries'][$prevoius_week_country->country] = $prevoius_week_countries_count;
+        $analytics = CountryAnalytic::where('user_id', $user_id)->whereDate('date', '>=', $from);
+        $previous_week_countries = $analytics->clone()->select('country')->distinct()->get();
+        foreach ($previous_week_countries as $previous_week_country) {
+            $previous_week_countries_count = $analytics->clone()->where('country', $previous_week_country->country)->sum('count');
+            $data['countries'][$previous_week_country->country] = $previous_week_countries_count;
         }
 
         return response()->json($data);
@@ -182,34 +192,35 @@ class AnalyticController extends Controller
      * Get previous month stats
      * @return \Illuminate\Http\Response
      */
-    public function previousMonthStats()
+    public function previousMonthStats(User $user)
     {
+        $user_id = $user->id;
         $data = [];
         $from = Carbon::now()->subDays('30')->toDateString();
-        $analytics = DayAnalytic::whereDate('date', '>=', $from);
-        $prevoius_month_total_visits = $analytics->clone()->sum('count');
-        $data['visits'] = $prevoius_month_total_visits;
+        $analytics = DayAnalytic::where('user_id', $user_id)->whereDate('date', '>=', $from);
+        $previous_month_total_visits = $analytics->clone()->sum('count');
+        $data['visits'] = $previous_month_total_visits;
         $month_before = Carbon::now()->subDays('60')->toDateString();
-        $month_before_visits = DayAnalytic::whereDate('date', '>=', $month_before)
+        $month_before_visits = DayAnalytic::where('user_id', $user_id)->whereDate('date', '>=', $month_before)
         ->whereDate('date', '<', $from);
         if ($month_before_visits) {
             $month_before_total_visits = $month_before_visits->sum('count');
             $data['visits_month_before'] = $month_before_total_visits;
-            $data['visits_percentage_difference'] = round(($prevoius_month_total_visits - $month_before_total_visits) / $month_before_total_visits * 100, 2);
+            $data['visits_percentage_difference'] = $previous_month_total_visits ? round(($previous_month_total_visits - $month_before_total_visits) / $month_before_total_visits * 100, 2) : $previous_month_total_visits * 100;
         }
 
-        $analytics = RefererAnalytic::whereDate('date', '>=', $from);
-        $prevoius_month_referers = $analytics->clone()->select('referer')->distinct()->get();
-        foreach ($prevoius_month_referers as $prevoius_month_referer) {
-            $prevoius_month_referers_count = $analytics->clone()->where('referer', $prevoius_month_referer->referer)->sum('count');
-            $data['referers'][$prevoius_month_referer->referer] = $prevoius_month_referers_count;
+        $analytics = RefererAnalytic::where('user_id', $user_id)->whereDate('date', '>=', $from);
+        $previous_month_referers = $analytics->clone()->select('referer')->distinct()->get();
+        foreach ($previous_month_referers as $previous_month_referer) {
+            $previous_month_referers_count = $analytics->clone()->where('referer', $previous_month_referer->referer)->sum('count');
+            $data['referers'][$previous_month_referer->referer] = $previous_month_referers_count;
         }
 
-        $analytics = CountryAnalytic::whereDate('date', '>=', $from);
-        $prevoius_month_countries = $analytics->clone()->select('country')->distinct()->get();
-        foreach ($prevoius_month_countries as $prevoius_month_country) {
-            $prevoius_month_countries_count = $analytics->clone()->where('country', $prevoius_month_country->country)->sum('count');
-            $data['countries'][$prevoius_month_country->country] = $prevoius_month_countries_count;
+        $analytics = CountryAnalytic::where('user_id', $user_id)->whereDate('date', '>=', $from);
+        $previous_month_countries = $analytics->clone()->select('country')->distinct()->get();
+        foreach ($previous_month_countries as $previous_month_country) {
+            $previous_month_countries_count = $analytics->clone()->where('country', $previous_month_country->country)->sum('count');
+            $data['countries'][$previous_month_country->country] = $previous_month_countries_count;
         }
 
         return response()->json($data);
@@ -219,34 +230,36 @@ class AnalyticController extends Controller
      * Get Previous 90 Days Stats
      * @return \Illuminate\Http\Response
      */
-    public function previousThreeMonthStats()
+    public function previousThreeMonthStats(User $user)
     {
+        $user_id = $user->id;
         $data = [];
         $from = Carbon::now()->subDays('90')->toDateString();
-        $analytics = DayAnalytic::whereDate('date', '>=', $from);
-        $prevoius_three_month_total_visits = $analytics->clone()->sum('count');
-        $data['visits'] = $prevoius_three_month_total_visits;
+        $analytics = DayAnalytic::where('user_id', $user_id)->whereDate('date', '>=', $from);
+        $previous_three_month_total_visits = $analytics->clone()->sum('count');
+        $data['visits'] = $previous_three_month_total_visits;
         $three_month_before = Carbon::now()->subDays('180')->toDateString();
-        $three_month_before_visits = DayAnalytic::whereDate('date', '>=', $three_month_before)
+        $three_month_before_visits = DayAnalytic::where('user_id', $user_id)->whereDate('date', '>=', $three_month_before)
         ->whereDate('date', '<', $from);
         if ($three_month_before_visits) {
             $three_month_before_total_visits = $three_month_before_visits->sum('count');
             $data['visits_three_month_before'] = $three_month_before_total_visits;
-            $data['visits_percentage_difference'] = round(($prevoius_three_month_total_visits - $three_month_before_total_visits) / $three_month_before_total_visits * 100, 2);
+            $data['visits_percentage_difference'] = $previous_three_month_total_visits ? round(($previous_three_month_total_visits - $three_month_before_total_visits) / $three_month_before_total_visits * 100, 2) : $previous_three_month_total_visits * 100;
+
         }
 
-        $analytics = RefererAnalytic::whereDate('date', '>=', $from);
-        $prevoius_three_month_referers = $analytics->clone()->select('referer')->distinct()->get();
-        foreach ($prevoius_three_month_referers as $prevoius_three_month_referer) {
-            $prevoius_three_month_referers_count = $analytics->clone()->where('referer', $prevoius_three_month_referer->referer)->sum('count');
-            $data['referers'][$prevoius_three_month_referer->referer] = $prevoius_three_month_referers_count;
+        $analytics = RefererAnalytic::where('user_id', $user_id)->whereDate('date', '>=', $from);
+        $previous_three_month_referers = $analytics->clone()->select('referer')->distinct()->get();
+        foreach ($previous_three_month_referers as $previous_three_month_referer) {
+            $previous_three_month_referers_count = $analytics->clone()->where('referer', $previous_three_month_referer->referer)->sum('count');
+            $data['referers'][$previous_three_month_referer->referer] = $previous_three_month_referers_count;
         }
 
-        $analytics = CountryAnalytic::whereDate('date', '>=', $from);
-        $prevoius_three_month_countries = $analytics->clone()->select('country')->distinct()->get();
-        foreach ($prevoius_three_month_countries as $prevoius_three_month_country) {
-            $prevoius_three_month_countries_count = $analytics->clone()->where('country', $prevoius_three_month_country->country)->sum('count');
-            $data['countries'][$prevoius_three_month_country->country] = $prevoius_three_month_countries_count;
+        $analytics = CountryAnalytic::where('user_id', $user_id)->whereDate('date', '>=', $from);
+        $previous_three_month_countries = $analytics->clone()->select('country')->distinct()->get();
+        foreach ($previous_three_month_countries as $previous_three_month_country) {
+            $previous_three_month_countries_count = $analytics->clone()->where('country', $previous_three_month_country->country)->sum('count');
+            $data['countries'][$previous_three_month_country->country] = $previous_three_month_countries_count;
         }
 
         return response()->json($data);
@@ -256,16 +269,18 @@ class AnalyticController extends Controller
      * Get All time stats
      * @return \Illuminate\Http\Response
      */
-    public function allTimeStats()
+    public function allTimeStats(User $user)
     {
+        $user_id = $user->id;
         $data = [];
-        $analytics = DayAnalytic::query();
+        $from = $user->created_at->toDateString();
+        $analytics = DayAnalytic::where('user_id', $user_id)->whereDate('date', '>=', $from);
         $total_visits = $analytics->clone()->sum('count');
         $data['visits'] = $total_visits;
 
         $referers = config('referers');
         foreach ($referers as $referer) {
-            $referers_count =  RefererAnalytic::where('referer', $referer)->sum('count');
+            $referers_count =  RefererAnalytic::where('user_id', $user_id)->whereDate('date', '>=', $from)->where('referer', $referer)->sum('count');
             if ($referers_count) {
                 $data['referers'][$referer] = $referers_count;
             }
@@ -273,7 +288,7 @@ class AnalyticController extends Controller
 
         $countries = config('countries');
         foreach ($countries as $country => $name) {
-            $countries_count = CountryAnalytic::where('country', $country)->sum('count');
+            $countries_count = CountryAnalytic::where('user_id', $user_id)->whereDate('date', '>=', $from)->where('country', $country)->sum('count');
             if ($countries_count) {
                 $data['countries'][$country] = $countries_count;
             }

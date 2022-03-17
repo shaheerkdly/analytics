@@ -15,9 +15,9 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::get('/today', [AnalyticController::class, 'todayStats'])->name('todayStats');
-Route::get('/previous-week', [AnalyticController::class, 'previousWeekStats'])->name('previousWeekStats');
-Route::get('/previous-month', [AnalyticController::class, 'previousMonthStats'])->name('previousMonthStats');
-Route::get('/previous-three-month', [AnalyticController::class, 'previousThreeMonthStats'])->name('previousThreeMonthStats');
-Route::get('/all-time', [AnalyticController::class, 'allTimeStats'])->name('allTimeStats');
+Route::get('/today/{user}', [AnalyticController::class, 'todayStats'])->name('todayStats');
+Route::get('/previous-week/{user}', [AnalyticController::class, 'previousWeekStats'])->name('previousWeekStats');
+Route::get('/previous-month/{user}', [AnalyticController::class, 'previousMonthStats'])->name('previousMonthStats');
+Route::get('/previous-three-month/{user}', [AnalyticController::class, 'previousThreeMonthStats'])->name('previousThreeMonthStats');
+Route::get('/all-time/{user}', [AnalyticController::class, 'allTimeStats'])->name('allTimeStats');
 

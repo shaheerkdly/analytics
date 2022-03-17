@@ -16,6 +16,7 @@ return new class extends Migration
         Schema::create('country_analytics', function (Blueprint $table) {
             $table->id();
             $table->date('date');
+            $table->foreignId('user_id')->constrained();
             $table->string('country', 2);
             $table->integer('count');
             $table->timestamps();
