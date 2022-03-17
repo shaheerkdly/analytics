@@ -276,7 +276,8 @@ class AnalyticController extends Controller
         $user_id = $user->id;
         $data = [];
         $from = $user->created_at->toDateString();
-        $analytics = DayAnalytic::where('user_id', $user_id)->whereDate('date', '>=', $from);
+        $analytics = DayAnalytic::where('user_id', $user_id);
+        //Can be used if it's actual data ->whereDate('date', '>=', $from);
         $total_visits = $analytics->clone()->sum('count');
         $data['visits'] = $total_visits;
 
