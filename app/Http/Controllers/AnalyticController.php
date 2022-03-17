@@ -76,7 +76,7 @@ class AnalyticController extends Controller
         $today = Carbon::now()->toDateString();
         $users = User::pluck('id', 'name')->toArray();
         foreach ($users as $name => $user_id) {
-            $analytics = Analytic::where('user_id', $user_id)->whereDate('date_time', '!=', $today);
+            $analytics = Analytic::where('user_id', $user_id);
             $analytcs_dates = $analytics->clone()->orderBy('date_time')->get()->groupBy(function ($item) {
                 return $item->date_time->format('Y-m-d');
             });
